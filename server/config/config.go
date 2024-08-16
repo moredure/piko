@@ -11,6 +11,102 @@ import (
 	"github.com/andydunstall/piko/pkg/log"
 )
 
+type RebalanceConfig struct {
+	// Threshold is the threshold indicating when to rebalance (0-1).
+	//
+	// Each node will rebalance if its number of local connections exceeds
+	// the cluster average by the given threshold.
+	//
+	// Such as if the threshold is 0.2, the node will rebalance if it has
+	// over 20% more connections than the cluster average.
+	Threshold float64 `json:"threshold" yaml:"threshold"`
+
+	// Rate is the percent of connections to drop every second when
+	// rebalancing (0-1).
+	//
+	// Such as if 0.005, the node will drop 0.5% of connections per second until
+	// it is balanced.
+	Rate float64 `json:"rate" yaml:"rate"`
+
+	// Conns is the minimum number of local connections the node must have
+	// before considering rebalancing.
+	//
+	// This prevents excess rebalancing when the number of connections is
+	// too small to matter.
+	Conns uint `json:"conns" yaml:"conns"`
+
+	// Disable indicates whether to disable connection rebalancing.
+	Disable bool `json:"disable" yaml:"disable"`
+}
+
+func (c *RebalanceConfig) Validate() error {
+	if c.Disable {
+		return nil
+	}
+
+	if c.Threshold < 0 {
+		return fmt.Errorf("threshold cannot be negative")
+	}
+	if c.Rate < 0 {
+		return fmt.Errorf("rate cannot be negative")
+	}
+	if c.Rate > 1 {
+		return fmt.Errorf("rate cannot exceed 1")
+	}
+
+	return nil
+}
+
+func (c *RebalanceConfig) RegisterFlags(fs *pflag.FlagSet, prefix string) {
+	if prefix == "" {
+		prefix = "rebalance."
+	} else {
+		prefix = prefix + ".rebalance."
+	}
+
+	fs.Float64Var(
+		&c.Threshold,
+		prefix+"threshold",
+		c.Threshold,
+		`
+The threshold indicating when to rebalance (0-1).
+
+Each node will rebalance if its number of local connections exceeds the cluster
+average by the given threshold.
+
+Such as if the threshold is 0.2, the node will rebalance if it has over 20%
+more connections than the cluster average.`,
+	)
+	fs.Float64Var(
+		&c.Rate,
+		prefix+"rate",
+		c.Rate,
+		`
+The percent of connections to drop every second when rebalancing (0-1).
+
+Such as if 0.005, the node will drop 0.5% of connections per second until it
+is balanced.`,
+	)
+	fs.UintVar(
+		&c.Conns,
+		prefix+"conns",
+		c.Conns,
+		`
+The minimum number of local connections the node must have before considering
+rebalancing.
+
+This prevents excess rebalancing when the number of connections is too small to
+matter.`,
+	)
+	fs.BoolVar(
+		&c.Disable,
+		prefix+"disable",
+		c.Disable,
+		`
+Whether to disable connection rebalancing.`,
+	)
+}
+
 // HTTPConfig contains generic configuration for the HTTP servers.
 type HTTPConfig struct {
 	// ReadTimeout is the maximum duration for reading the entire
@@ -176,12 +272,17 @@ type UpstreamConfig struct {
 
 	Auth auth.Config `json:"auth" yaml:"auth"`
 
+	Rebalance RebalanceConfig `json:"rebalance" yaml:"rebalance"`
+
 	TLS TLSConfig `json:"tls" yaml:"tls"`
 }
 
 func (c *UpstreamConfig) Validate() error {
 	if c.BindAddr == "" {
 		return fmt.Errorf("missing bind addr")
+	}
+	if err := c.Rebalance.Validate(); err != nil {
+		return fmt.Errorf("rebalance: %w", err)
 	}
 	if err := c.TLS.Validate(); err != nil {
 		return fmt.Errorf("tls: %w", err)
@@ -218,6 +319,8 @@ advertise address of '10.26.104.14:8000'.`,
 	)
 
 	c.Auth.RegisterFlags(fs, "upstream")
+
+	c.Rebalance.RegisterFlags(fs, "upstream")
 
 	c.TLS.RegisterFlags(fs, "upstream")
 }
@@ -432,6 +535,11 @@ func Default() *Config {
 		},
 		Upstream: UpstreamConfig{
 			BindAddr: ":8001",
+			Rebalance: RebalanceConfig{
+				Threshold: 0.2,
+				Rate:      0.005,
+				Conns:     100,
+			},
 		},
 		Admin: AdminConfig{
 			BindAddr: ":8002",

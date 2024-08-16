@@ -60,6 +60,12 @@ upstream:
     audience: my-audience
     issuer: my-issuer
 
+  rebalance:
+    threshold: 0.2
+    rate: 0.005
+    conns: 100
+    disable: false
+
   tls:
     enabled: true
     cert: /piko/cert.pem
@@ -154,6 +160,11 @@ grace_period: 2m
 				Audience:       "my-audience",
 				Issuer:         "my-issuer",
 			},
+			Rebalance: RebalanceConfig{
+				Threshold: 0.2,
+				Rate:      0.005,
+				Conns:     100,
+			},
 			TLS: TLSConfig{
 				Enabled: true,
 				Cert:    "/piko/cert.pem",
@@ -229,6 +240,9 @@ func TestConfig_LoadFlags(t *testing.T) {
 		"--proxy.tls.key", "/piko/key.pem",
 		"--upstream.bind-addr", "10.15.104.25:8001",
 		"--upstream.advertise-addr", "1.2.3.4:8001",
+		"--upstream.rebalance.threshold", "0.2",
+		"--upstream.rebalance.rate", "0.005",
+		"--upstream.rebalance.conns", "100",
 		"--upstream.auth.hmac-secret-key", "hmac-secret-key",
 		"--upstream.auth.rsa-public-key", "rsa-public-key",
 		"--upstream.auth.ecdsa-public-key", "ecdsa-public-key",
@@ -303,6 +317,11 @@ func TestConfig_LoadFlags(t *testing.T) {
 				ECDSAPublicKey: "ecdsa-public-key",
 				Audience:       "my-audience",
 				Issuer:         "my-issuer",
+			},
+			Rebalance: RebalanceConfig{
+				Threshold: 0.2,
+				Rate:      0.005,
+				Conns:     100,
 			},
 			TLS: TLSConfig{
 				Enabled: true,
